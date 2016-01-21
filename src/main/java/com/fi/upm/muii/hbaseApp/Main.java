@@ -10,13 +10,74 @@
 
 package com.fi.upm.muii.hbaseApp;
 
-import java.util.List;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FilenameFilter;
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class Main {
 
-	private void loadData(String dataFolder) {
+	private TrendingTable trendingTable;
 
+	private Collection<Trending> readFile(String file) throws IOException {
+
+		Collection<Trending> trendings = new ArrayList<>();
+
+		FileInputStream fs = new FileInputStream(file);
+		byte[] data = new byte[(int) file.length()];
+		fs.read(data);
+		fs.close();
+
+		String content = Arrays.toString(data);
+
+		Pattern pattern = Pattern.compile("([\\d]),(\\p{Lower}{2}),(\\w*),([\\d]),(\\w*),([\\d]),(\\w*),([\\d])");
+		Matcher matcher = pattern.matcher(content);
+		while (matcher.find()) {
+
+			long timestamp = Long.parseLong(matcher.group(1)); // timestamp
+			String lenguage = matcher.group(2); // lenguage
+			trendings.add(new Trending(timestamp, lenguage, matcher.group(3), Integer.parseInt(matcher.group(4))));
+			trendings.add(new Trending(timestamp, lenguage, matcher.group(5), Integer.parseInt(matcher.group(6))));
+			trendings.add(new Trending(timestamp, lenguage, matcher.group(7), Integer.parseInt(matcher.group(8))));
+		}
+
+		return trendings;
+	}
+
+	private void loadData(String dataFolder) throws IOException {
+
+		Collection<Trending> trendings = new ArrayList<>();
+
+		File dir = new File(dataFolder);
+
+		if (dir.isDirectory()) {
+
+			// Look up for files
+			File[] files = dir.listFiles(new FilenameFilter() {
+				public boolean accept(File dir, String name)
+				{
+					return name.endsWith(".out");
+				}
+			});
+
+			// Reading trendings
+			for (File file : files) {
+
+				trendings.addAll(readFile(file.getAbsolutePath()));
+			}
+
+			// Storing trendings
+			for (Trending trend : trendings) {
+
+				trendingTable.storeData(trend);
+			}
+		}
 	}
 
 	private void executeQueryOne(long startTS, long endTS, int n, List<String> lenguages, String outputFolder) {
@@ -37,33 +98,38 @@ public class Main {
 		if (args.length == 2 || args.length == 6 || args.length == 5) {
 			int mode = Integer.parseInt(args[0]);
 			switch(mode) {
-			case 0:
-				//			mode dataFolder
-				main.loadData(args[1]);
-				break;
 			case 1:
-	
-				//			mode startTS endTS N language outputFolder
+
+				// mode startTS endTS N language outputFolder
 				main.executeQueryOne(Long.parseLong(args[1]),
-									 Long.parseLong(args[2]),
-									 Integer.parseInt(args[3]),
-									 Arrays.asList(args[4].split(",")),
-									 args[5]);
+						Long.parseLong(args[2]),
+						Integer.parseInt(args[3]),
+						Arrays.asList(args[4].split(",")),
+						args[5]);
 				break;
 			case 2:
-				//			mode startTS endTS N language outputFolder
+				// mode startTS endTS N language outputFolder
 				main.executeQueryTwo(Long.parseLong(args[1]),
-									 Long.parseLong(args[2]),
-									 Integer.parseInt(args[3]),
-									 Arrays.asList(args[4].split(",")),
-									 args[5]);
+						Long.parseLong(args[2]),
+						Integer.parseInt(args[3]),
+						Arrays.asList(args[4].split(",")),
+						args[5]);
 				break;
 			case 3:
-	
-				//			mode startTS endTS N outputFolder
+
+				// mode startTS endTS N outputFolder
 				main.executeQueryThree(Long.parseLong(args[1]),
-									   Long.parseLong(args[2]),
-								       args[3]);
+						Long.parseLong(args[2]),
+						args[3]);
+				break;
+			case 4:
+				// mode dataFolder
+				try {
+					main.loadData(args[1]);
+				} catch (IOException e) {
+
+					System.out.println("Error when processing files: " + e);
+				}
 				break;
 			default:
 				appHelp();
