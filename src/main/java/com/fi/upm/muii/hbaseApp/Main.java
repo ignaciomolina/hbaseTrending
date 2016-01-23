@@ -20,24 +20,33 @@ import java.util.Collection;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 public class Main {
 
 	private TrendingTable trendingTable;
+	
+	public Main () {
+		
+		this.trendingTable = new TrendingTable();
+	}
 
 	private Collection<Trending> readFile(String file) throws IOException {
 
 		Collection<Trending> trendings = new ArrayList<>();
 
-		FileInputStream fs = new FileInputStream(file);
-		byte[] data = new byte[(int) file.length()];
-		fs.read(data);
-		fs.close();
+		byte[] data = Files.readAllBytes(Paths.get(file));
 
-		String content = Arrays.toString(data);
+		String content = new String(data, Charset.forName("UTF-8"));
 
-		Pattern pattern = Pattern.compile("([\\d]),(\\p{Lower}{2}),(\\w*),([\\d]),(\\w*),([\\d]),(\\w*),([\\d])");
+		String regEx = "(\\d+),(.*),(.+),([\\d+]),(.+),([\\d+]),(.+),([\\d+])";
+
+		Pattern pattern = Pattern.compile(regEx);
 		Matcher matcher = pattern.matcher(content);
+
 		while (matcher.find()) {
 
 			long timestamp = Long.parseLong(matcher.group(1)); // timestamp
@@ -80,16 +89,36 @@ public class Main {
 		}
 	}
 
-	private void executeQueryOne(long startTS, long endTS, int n, List<String> lenguages, String outputFolder) {
+	private static void writeOutputFolder(String result, String outputFolder) {
 
+		Path file = Paths.get(outputFolder);
+
+		try {
+			if (!Files.exists(file)) {
+				Files.createDirectories(file.getParent());
+				Files.createFile(file);
+			}
+			Files.write(file, result.getBytes());
+
+		} catch (IOException e) {
+			System.out.println("Write to file failed...");
+			e.printStackTrace();
+		}
 	}
 
-	private void executeQueryTwo(long startTS, long endTS, int n, List<String> lenguages, String outputFolder) {
+	private void executeQueryOne(long startTS, long endTS, int n, String language, String outputFolder) {
+		String result = this.trendingTable.queryOne(startTS,endTS,n,language);
+		Main.writeOutputFolder(result,outputFolder);
+	}
 
+	private void executeQueryTwo(long startTS, long endTS, int n, List<String> languages, String outputFolder) {
+		String result = this.trendingTable.queryTwo(startTS,endTS,n,languages);
+		Main.writeOutputFolder(result,outputFolder);
 	}
 
 	private void executeQueryThree(long startTS, long endTS, String outputFolder) {
-
+		String result = this.trendingTable.queryThree(startTS,endTS);
+		Main.writeOutputFolder(result,outputFolder);
 	}
 
 	public static void main( String[] args ) {
@@ -99,12 +128,12 @@ public class Main {
 			int mode = Integer.parseInt(args[0]);
 			switch(mode) {
 			case 1:
-
 				// mode startTS endTS N language outputFolder
 				main.executeQueryOne(Long.parseLong(args[1]),
 						Long.parseLong(args[2]),
 						Integer.parseInt(args[3]),
-						Arrays.asList(args[4].split(",")),
+						// Arrays.asList(args[4].split(",")), (ONLY 1 LANG)
+						args[4],
 						args[5]);
 				break;
 			case 2:
