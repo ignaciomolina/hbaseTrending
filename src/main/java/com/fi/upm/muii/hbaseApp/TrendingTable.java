@@ -11,7 +11,9 @@ package com.fi.upm.muii.hbaseApp;
 
 import java.io.IOException;
 import java.io.InterruptedIOException;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
@@ -20,6 +22,7 @@ import org.apache.hadoop.hbase.CellUtil;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HTableDescriptor;
+import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.MasterNotRunningException;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.ZooKeeperConnectionException;
@@ -33,65 +36,112 @@ import org.apache.hadoop.hbase.client.ResultScanner;
 import org.apache.hadoop.hbase.client.RetriesExhaustedWithDetailsException;
 import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class TrendingTable {
 
-	private static final Logger logger = LoggerFactory.getLogger(TrendingTable.class);
-
 	private final static String TABLE = "trendingTopics";
-	private final static String COLUMN_FAMILY = "frequncies";
-	private HTable table;
+	private final static String CF_FREQUENCY = "frequncies";
+	private final static String CF_LENGUAGE = "lenguage";
+	private final static String CF_TIMESTAMP = "timestamp";
+
+	private Configuration conf;
 
 	public TrendingTable() {
 
-		Configuration conf = HBaseConfiguration.create();
+		conf = HBaseConfiguration.create();
+		String [] columnFamilies = {CF_TIMESTAMP, CF_LENGUAGE, CF_FREQUENCY};
+		createTable(TABLE, columnFamilies);
+	}
+
+	public void createTable(String table, String [] columnFamilies) {
 
 		try {
 
 			HBaseAdmin admin = new HBaseAdmin(conf);
 
-			HTableDescriptor tableDescriptor = new HTableDescriptor(TableName.valueOf(TABLE));
-			HColumnDescriptor family = new HColumnDescriptor(COLUMN_FAMILY);
-			tableDescriptor.addFamily(family);
-			admin.createTable(tableDescriptor);
-			admin.close();
+			if (!admin.tableExists(TABLE)) {
 
-			HConnection conn = HConnectionManager.createConnection(conf);
-			table = new HTable(TableName.valueOf(TABLE), conn);
+				HTableDescriptor tableDescriptor = new HTableDescriptor(TableName.valueOf(TABLE));
+				for (String columnFamily : columnFamilies) {
+
+					HColumnDescriptor family = new HColumnDescriptor(columnFamily);
+					tableDescriptor.addFamily(family);
+				}
+				admin.createTable(tableDescriptor);
+			}
+
+			admin.close();
 
 		} catch (MasterNotRunningException e) {
 
-			logger.error("Error when trying to connect to hbase.", e);
+			System.out.println("Error when trying to create table in hbase." + e);
 		} catch (ZooKeeperConnectionException e) {
 
-			logger.error("Error when trying to connect to hbase.", e);
+			System.out.println("Error when trying to create table in hbase." + e);
 		} catch (IOException e) {
 
-			logger.error("Error when trying to connect to hbase.", e);
+			System.out.println("Error when trying to create table in hbase." + e);
 		}
 	}
 
-	public void storeData(Trending trending) {
-
-		byte [] columnFamily = Bytes.toBytes(COLUMN_FAMILY);
-		byte [] key = Bytes.toBytes(trending.getId());
-
-		Put put = new Put(key);
-		put.add(columnFamily, Bytes.toBytes("lenguage"), Bytes.toBytes(trending.getLenguage()));
-		put.add(columnFamily, Bytes.toBytes("timestamp"), Bytes.toBytes(trending.getHashtag()));
-		put.add(columnFamily, Bytes.toBytes("hashtag"), Bytes.toBytes(trending.getFrequency()));
-		put.add(columnFamily, Bytes.toBytes("frequency"), Bytes.toBytes(trending.getTimestamp()));
+	public void deleteTable(String tableName) {
 
 		try {
-			table.put(put);
+
+			HBaseAdmin admin = new HBaseAdmin(conf);
+			admin.disableTable(tableName);
+			admin.deleteTable(tableName);
+			admin.close();
+
+		} catch (MasterNotRunningException e) {
+
+			System.out.println("Error when trying to delete table in hbase." + e);
+		} catch (ZooKeeperConnectionException e) {
+
+			System.out.println("Error when trying to delete table in hbase." + e);
+		} catch (IOException e) {
+
+			System.out.println("Error when trying to delete table in hbase." + e);
+		}
+	}
+
+	public void storeData(Collection<Trending> trendings) {
+
+		HConnection conn = null;
+		HTable table = null;
+		try {
+			conn = HConnectionManager.createConnection(conf);
+			table = new HTable(TableName.valueOf(TABLE), conn);
+
+		} catch (IOException e) {
+
+			System.out.println("Error when trying connect to hbase." + e);
+		}
+		try {
+
+			for (Trending trending : trendings) {
+
+				byte [] key = Bytes.toBytes(trending.getId());
+
+				Put put = new Put(key);
+				put.add(Bytes.toBytes(CF_LENGUAGE), Bytes.toBytes("lenguage"), Bytes.toBytes(trending.getLenguage()));
+				put.add(Bytes.toBytes(CF_TIMESTAMP), Bytes.toBytes("timestamp"), Bytes.toBytes(trending.getHashtag()));
+				put.add(Bytes.toBytes(CF_FREQUENCY), Bytes.toBytes("hashtag"), Bytes.toBytes(trending.getFrequency()));
+				put.add(Bytes.toBytes(CF_FREQUENCY), Bytes.toBytes("frequency"), Bytes.toBytes(trending.getTimestamp()));
+				table.put(put);
+			}
+
+			table.close();
+			conn.close();
 		} catch (RetriesExhaustedWithDetailsException e) {
 
-			logger.error("Error when trying to load data.", e);
+			System.out.println("Error when trying to load data." + e);
 		} catch (InterruptedIOException e) {
 
-			logger.error("Error when trying to load data.", e);
+			System.out.println("Error when trying to load data." + e);
+		} catch (IOException e) {
+
+			System.out.println("Error when trying to close table." + e);
 		}
 	}
 
@@ -99,8 +149,24 @@ public class TrendingTable {
 
 		String result = "";
 
-		Scan scan = new Scan(Trending.generateStartKey(language, startTS),
-							 Trending.generateEndKey(language, endTS));
+		HConnection conn = null;
+		HTable table = null;
+		try {
+			conn = HConnectionManager.createConnection(conf);
+			System.out.println("accedemos a table.");
+			table = new HTable(TableName.valueOf(TABLE), conn);
+
+		} catch (IOException e) {
+
+			System.out.println("Error when trying connect to hbase." + e);
+		}
+
+//		Scan scan = new Scan(Bytes.toBytes(startTS),
+//							 Bytes.toBytes(endTS));
+		Scan scan = new Scan();
+
+		//		Scan scan = new Scan(Trending.generateStartKey(language, startTS),
+		//				Trending.generateEndKey(language, endTS));
 
 		/*Filter f = new
 				SingleColumnValueFilter(Bytes.toBytes(COLUMN_FAMILY),
@@ -111,26 +177,38 @@ public class TrendingTable {
 
 		try {
 
+			System.out.println("Scaneando...");
 			ResultScanner rs = table.getScanner(scan);
-			Result res = rs.next();
+			//			Result res = rs.next();
 
-			while (res != null && !res.isEmpty()) {
+			System.out.println("Resultados: ");
+			for (Result res : rs) {
+				
+				System.out.println("item size: " + res.size() + ", " + new String(res.getRow()));
+				for(KeyValue kv : res.raw()){
+					//				CellScanner scanner = res.cellScanner();
+					//
+					//				while (scanner.advance()) {
+					//
+					//					Cell cell = scanner.current();
+					//					byte[] value = CellUtil.cloneValue(cell);
+					//					//TODO instanciar la salida en una estructura de datos y sacar el top-N
+					//					result += Bytes.toLong(value) + "\n"; // PROVISIONAL
+					//				}
+					Map<String, Object> values = kv.toStringMap();
+					String key = kv.getKeyString();
+					System.out.println("Key: " + key + ", Values: " + values);
 
-				CellScanner scanner = res.cellScanner();
-
-				while (scanner.advance()) {
-
-					Cell cell = scanner.current();
-					byte[] value = CellUtil.cloneValue(cell);
-					//TODO instanciar la salida en una estructura de datos y sacar el top-N
-					result += Bytes.toLong(value) + "\n"; // PROVISIONAL
 				}
-				res = rs.next();
+				//				res = rs.next();
 			}
+			System.out.println("¡Eso es todo!");
 
+			table.close();
+			conn.close();
 		} catch (IOException e) {
 
-			logger.error("Error when trying to do query one.", e);
+			System.out.println("Error when trying to do query one." + e);
 		}
 
 		return result;
@@ -140,10 +218,22 @@ public class TrendingTable {
 
 		String result = "";
 
+		HConnection conn = null;
+		HTable table = null;
+		try {
+			conn = HConnectionManager.createConnection(conf);
+			System.out.println("accedemos a table.");
+			table = new HTable(TableName.valueOf(TABLE), conn);
+
+		} catch (IOException e) {
+
+			System.out.println("Error when trying connect to hbase." + e);
+		}
+
 		for (String lang : languages) {
 
 			Scan scan = new Scan(Trending.generateStartKey(lang, startTS),
-								 Trending.generateEndKey(lang, endTS));
+					Trending.generateEndKey(lang, endTS));
 
 			try {
 
@@ -164,9 +254,11 @@ public class TrendingTable {
 
 					res = rs.next();
 				}
+				table.close();
+				conn.close();
 			} catch (IOException e) {
 
-				logger.error("Error when trying to do query two.", e);
+				System.out.println("Error when trying to do query two." + e);
 			}
 
 		}
@@ -177,6 +269,18 @@ public class TrendingTable {
 	public String queryThree(long startTS, long endTS) {
 
 		String result = "";
+
+		HConnection conn = null;
+		HTable table = null;
+		try {
+			conn = HConnectionManager.createConnection(conf);
+			System.out.println("accedemos a table.");
+			table = new HTable(TableName.valueOf(TABLE), conn);
+
+		} catch (IOException e) {
+
+			System.out.println("Error when trying connect to hbase." + e);
+		}
 
 		try {
 
@@ -201,7 +305,7 @@ public class TrendingTable {
 			}
 		} catch (IOException e) {
 
-			logger.error("Error when trying to do query three.", e);
+			System.out.println("Error when trying to do query three." + e);
 		}
 
 		return result;

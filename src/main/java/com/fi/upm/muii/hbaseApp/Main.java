@@ -27,9 +27,9 @@ import java.util.regex.Pattern;
 public class Main {
 
 	private TrendingTable trendingTable;
-	
+
 	public Main () {
-		
+
 		this.trendingTable = new TrendingTable();
 	}
 
@@ -81,10 +81,8 @@ public class Main {
 			}
 
 			// Storing trendings
-			for (Trending trend : trendings) {
-
-				trendingTable.storeData(trend);
-			}
+			trendingTable.storeData(trendings);
+			System.out.println("Hecho, " + trendings.size() + " trending topic almacenados con exito.");
 		}
 	}
 
@@ -107,24 +105,26 @@ public class Main {
 
 	private void executeQueryOne(long startTS, long endTS, int n, String language, String outputFolder) {
 		String result = this.trendingTable.queryOne(startTS,endTS,n,language);
-		Main.writeOutputFolder(result,outputFolder);
+		Main.writeOutputFolder(result,outputFolder + "14_query1.out");
 	}
 
 	private void executeQueryTwo(long startTS, long endTS, int n, List<String> languages, String outputFolder) {
 		String result = this.trendingTable.queryTwo(startTS,endTS,n,languages);
-		Main.writeOutputFolder(result,outputFolder);
+		Main.writeOutputFolder(result,outputFolder + "14_query2.out");
 	}
 
 	private void executeQueryThree(long startTS, long endTS, String outputFolder) {
 		String result = this.trendingTable.queryThree(startTS,endTS);
-		Main.writeOutputFolder(result,outputFolder);
+		Main.writeOutputFolder(result,outputFolder + "14_query2.out");
 	}
 
 	public static void main( String[] args ) {
 
-		Main main = new Main();
 		if (args.length == 2 || args.length == 6 || args.length == 5) {
+
+			Main main = new Main();
 			int mode = Integer.parseInt(args[0]);
+
 			switch(mode) {
 			case 1:
 				// mode startTS endTS N language outputFolder
@@ -162,6 +162,9 @@ public class Main {
 			default:
 				appHelp();
 			}
+
+			// TODO: Esto habra que quitarlo en la version final
+//			main.trendingTable.deleteTable("trendingTopics");
 
 		} else {
 

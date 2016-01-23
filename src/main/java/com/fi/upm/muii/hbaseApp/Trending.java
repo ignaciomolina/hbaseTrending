@@ -29,7 +29,7 @@ public class Trending {
 	
 	public String getId() {
 		
-		return lenguage + hashtag + timestamp; //POR QUE AQUI EL TS?
+		return String.valueOf(timestamp); //POR QUE AQUI EL TS?
 	}
 
 	public long getTimestamp() {
