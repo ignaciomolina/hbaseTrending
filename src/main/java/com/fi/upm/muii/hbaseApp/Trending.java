@@ -1,4 +1,16 @@
+/*
+ * Task for:
+ * 		Cloud Computing and Big Data Ecosystems Design
+ * 
+ * Team: 14
+ * Members:
+ * 		Ignacio Molina Cuquerella
+ * 		Jose María Ramiréz Barambones
+ */
+
 package com.fi.upm.muii.hbaseApp;
+
+import org.apache.hadoop.hbase.util.Bytes;
 
 public class Trending {
 
@@ -17,7 +29,7 @@ public class Trending {
 	
 	public String getId() {
 		
-		return lenguage + hashtag + timestamp;
+		return lenguage + hashtag + timestamp; //POR QUE AQUI EL TS?
 	}
 
 	public long getTimestamp() {
@@ -34,5 +46,40 @@ public class Trending {
 
 	public int getFrequency() {
 		return frequency;
+	}
+	
+	/* Structure of the Key
+	 * 48 Bytes  ( 10 lenguage + 30 hashtag + 8 timestamp)
+	 */
+	
+	public static byte[] generateKey(String lang, String hashtag, long timestamp) {
+		byte[] key = new byte[48];
+		System.arraycopy(Bytes.toBytes(lang),0,key,0,lang.length());
+		System.arraycopy(Bytes.toBytes(hashtag),0,key,10,hashtag.length());
+		System.arraycopy(Bytes.toBytes(timestamp),0,key,40,hashtag.length());
+		return key;
+	}
+	
+	public static byte[] generateStartKey(String lang, long timestamp) {
+		
+		byte[] key = new byte[10];
+		System.arraycopy(Bytes.toBytes(lang),0,key,
+		0,lang.length());
+		
+		for (int i = 10; i < 40; i++){
+			key[i] = (byte)-255;
+		}
+		return key;
+	}
+	
+	public static byte[] generateEndKey(String lang, long timestamp) {
+		
+		byte[] key = new byte[20];
+		System.arraycopy(Bytes.toBytes(lang),0,key,0,lang.length());
+		System.arraycopy(Bytes.toBytes(timestamp),0,key,40,lang.length());
+		for (int i = 10; i < 40; i++){
+			key[i] = (byte)255;
+		}
+		return key;
 	}
 }
