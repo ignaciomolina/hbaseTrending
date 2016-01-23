@@ -37,7 +37,7 @@
 					</platforms>
 					<programs>
 						<program>
-							<mainClass>muii.Main</mainClass>
+							<mainClass>com.fi.upm.muii.hbaseApp.Main</mainClass>
 							<name>hbaseApp.sh</name>
 							<jvmSettings>
 								<extraArguments>
