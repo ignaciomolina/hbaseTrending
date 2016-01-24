@@ -27,9 +27,17 @@ public class Trending {
 		this.frequency = frequency;
 	}
 	
-	public String getId() {
+	/* Todos los elementos se distinguen como minimo lenguaje y su timestamp.
+	 * Dicho esto, configuramos la clave:
+	 * 
+	 * | timestamp 	| lang 		|
+	 * | 8Bytes		| 2Bytes	|
+	 * 
+	 */
+	
+	public byte[] getKey() {
 		
-		return String.valueOf(timestamp); //POR QUE AQUI EL TS?
+		return generateKey(lenguage, timestamp);
 	}
 
 	public long getTimestamp() {
@@ -48,36 +56,35 @@ public class Trending {
 		return frequency;
 	}
 	
-	/* Structure of the Key
-	 * 48 Bytes  ( 10 lenguage + 30 hashtag + 8 timestamp)
+	/* Structure of the Key: 8 para el long del ts y 2 para los carácteres del lenguaje.
+	 * Se debe poner primero el ts ya que filtraremos lang para la query 3.
+	 * 10 Bytes  (8 timestamp + 2 lang)
 	 */
 	
-	public static byte[] generateKey(String lang, String hashtag, long timestamp) {
-		byte[] key = new byte[48];
-		System.arraycopy(Bytes.toBytes(lang),0,key,0,lang.length());
-		System.arraycopy(Bytes.toBytes(hashtag),0,key,10,hashtag.length());
-		System.arraycopy(Bytes.toBytes(timestamp),0,key,40,hashtag.length());
+	public static byte[] generateKey(String lang, long timestamp) {
+		byte[] key = new byte[10];
+		System.arraycopy(Bytes.toBytes(timestamp),0,key,0,8);
+		System.arraycopy(Bytes.toBytes(lang),0,key,8,2);
 		return key;
 	}
 	
-	public static byte[] generateStartKey(String lang, long timestamp) {
+	public static byte[] generateStartKey(long timestamp) {
 		
 		byte[] key = new byte[10];
-		System.arraycopy(Bytes.toBytes(lang),0,key,
-		0,lang.length());
+		System.arraycopy(Bytes.toBytes(timestamp),0,key,0,8);
 		
-		for (int i = 10; i < 40; i++){
+		for (int i = 8; i < 10; i++){
 			key[i] = (byte)-255;
 		}
 		return key;
 	}
 	
-	public static byte[] generateEndKey(String lang, long timestamp) {
+	public static byte[] generateEndKey(long timestamp) {
 		
-		byte[] key = new byte[20];
-		System.arraycopy(Bytes.toBytes(lang),0,key,0,lang.length());
-		System.arraycopy(Bytes.toBytes(timestamp),0,key,40,lang.length());
-		for (int i = 10; i < 40; i++){
+		byte[] key = new byte[10];
+		System.arraycopy(Bytes.toBytes(timestamp),0,key,0,8);
+
+		for (int i = 8; i < 10; i++){
 			key[i] = (byte)255;
 		}
 		return key;

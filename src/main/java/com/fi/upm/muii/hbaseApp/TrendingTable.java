@@ -10,22 +10,16 @@
 package com.fi.upm.muii.hbaseApp;
 
 import java.io.IOException;
-import java.io.InterruptedIOException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.Cell;
-import org.apache.hadoop.hbase.CellScanner;
-import org.apache.hadoop.hbase.CellUtil;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HTableDescriptor;
-import org.apache.hadoop.hbase.KeyValue;
-import org.apache.hadoop.hbase.MasterNotRunningException;
 import org.apache.hadoop.hbase.TableName;
-import org.apache.hadoop.hbase.ZooKeeperConnectionException;
 import org.apache.hadoop.hbase.client.HBaseAdmin;
 import org.apache.hadoop.hbase.client.HConnection;
 import org.apache.hadoop.hbase.client.HConnectionManager;
@@ -33,35 +27,44 @@ import org.apache.hadoop.hbase.client.HTable;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
-import org.apache.hadoop.hbase.client.RetriesExhaustedWithDetailsException;
 import org.apache.hadoop.hbase.client.Scan;
+import org.apache.hadoop.hbase.filter.CompareFilter.CompareOp;
+import org.apache.hadoop.hbase.filter.Filter;
+import org.apache.hadoop.hbase.filter.SingleColumnValueFilter;
 import org.apache.hadoop.hbase.util.Bytes;
 
 public class TrendingTable {
 
 	private final static String TABLE = "trendingTopics";
-	private final static String CF_FREQUENCY = "frequncies";
-	private final static String CF_LENGUAGE = "lenguage";
-	private final static String CF_TIMESTAMP = "timestamp";
+	private final static String CF_HASHTAG = "hashtag";
+	private final static String CF_METADATA = "metadata";
 
 	private Configuration conf;
 
+	/* Esquema de la tabla
+	 * 
+	 * trendingTopics
+	 * keys	| hashtag 						| metadata
+	 * 		| hashtag:name	| hashtag:freq	| metadata:lang	| metadata:ts
+	 */
+	
 	public TrendingTable() {
 
 		conf = HBaseConfiguration.create();
-		String [] columnFamilies = {CF_TIMESTAMP, CF_LENGUAGE, CF_FREQUENCY};
+		String [] columnFamilies = {CF_HASHTAG, CF_METADATA};
 		createTable(TABLE, columnFamilies);
 	}
-
+	
 	public void createTable(String table, String [] columnFamilies) {
 
 		try {
 
 			HBaseAdmin admin = new HBaseAdmin(conf);
 
-			if (!admin.tableExists(TABLE)) {
+			// DEBUGGING: crea siempre hasta asegurar que las tablas son correctas
+			if (!admin.tableExists(table)) {
 
-				HTableDescriptor tableDescriptor = new HTableDescriptor(TableName.valueOf(TABLE));
+				HTableDescriptor tableDescriptor = new HTableDescriptor(TableName.valueOf(table));
 				for (String columnFamily : columnFamilies) {
 
 					HColumnDescriptor family = new HColumnDescriptor(columnFamily);
@@ -70,139 +73,90 @@ public class TrendingTable {
 				admin.createTable(tableDescriptor);
 			}
 
+			//System.out.println("Table " + table + " created with table families: " + columnFamilies);
 			admin.close();
 
-		} catch (MasterNotRunningException e) {
-
-			System.out.println("Error when trying to create table in hbase." + e);
-		} catch (ZooKeeperConnectionException e) {
-
-			System.out.println("Error when trying to create table in hbase." + e);
 		} catch (IOException e) {
-
 			System.out.println("Error when trying to create table in hbase." + e);
-		}
+		} 
 	}
 
 	public void deleteTable(String tableName) {
 
 		try {
-
 			HBaseAdmin admin = new HBaseAdmin(conf);
 			admin.disableTable(tableName);
 			admin.deleteTable(tableName);
 			admin.close();
 
-		} catch (MasterNotRunningException e) {
-
-			System.out.println("Error when trying to delete table in hbase." + e);
-		} catch (ZooKeeperConnectionException e) {
-
-			System.out.println("Error when trying to delete table in hbase." + e);
 		} catch (IOException e) {
-
 			System.out.println("Error when trying to delete table in hbase." + e);
 		}
 	}
 
 	public void storeData(Collection<Trending> trendings) {
 
-		HConnection conn = null;
-		HTable table = null;
 		try {
-			conn = HConnectionManager.createConnection(conf);
-			table = new HTable(TableName.valueOf(TABLE), conn);
-
-		} catch (IOException e) {
-
-			System.out.println("Error when trying connect to hbase." + e);
-		}
-		try {
+			
+			HConnection conn = HConnectionManager.createConnection(conf);
+			HTable table = new HTable(TableName.valueOf(TABLE), conn);
 
 			for (Trending trending : trendings) {
 
-				byte [] key = Bytes.toBytes(trending.getId());
+				byte [] key = trending.getKey();
 
 				Put put = new Put(key);
-				put.add(Bytes.toBytes(CF_LENGUAGE), Bytes.toBytes("lenguage"), Bytes.toBytes(trending.getLenguage()));
-				put.add(Bytes.toBytes(CF_TIMESTAMP), Bytes.toBytes("timestamp"), Bytes.toBytes(trending.getHashtag()));
-				put.add(Bytes.toBytes(CF_FREQUENCY), Bytes.toBytes("hashtag"), Bytes.toBytes(trending.getFrequency()));
-				put.add(Bytes.toBytes(CF_FREQUENCY), Bytes.toBytes("frequency"), Bytes.toBytes(trending.getTimestamp()));
+				put.add(Bytes.toBytes(CF_HASHTAG), Bytes.toBytes("name"), Bytes.toBytes(trending.getHashtag()));
+				put.add(Bytes.toBytes(CF_HASHTAG), Bytes.toBytes("freq"), Bytes.toBytes(trending.getFrequency()));
+				put.add(Bytes.toBytes(CF_METADATA), Bytes.toBytes("lang"), Bytes.toBytes(trending.getLenguage()));
+				put.add(Bytes.toBytes(CF_METADATA), Bytes.toBytes("ts"), Bytes.toBytes(trending.getTimestamp()));
 				table.put(put);
 			}
 
 			table.close();
 			conn.close();
-		} catch (RetriesExhaustedWithDetailsException e) {
-
-			System.out.println("Error when trying to load data." + e);
-		} catch (InterruptedIOException e) {
-
-			System.out.println("Error when trying to load data." + e);
+			
 		} catch (IOException e) {
-
 			System.out.println("Error when trying to close table." + e);
 		}
 	}
 
 	public String queryOne(long startTS, long endTS, int n, String language) {
 
-		String result = "";
-
-		HConnection conn = null;
-		HTable table = null;
-		try {
-			conn = HConnectionManager.createConnection(conf);
-			System.out.println("accedemos a table.");
-			table = new HTable(TableName.valueOf(TABLE), conn);
-
-		} catch (IOException e) {
-
-			System.out.println("Error when trying connect to hbase." + e);
-		}
-
-//		Scan scan = new Scan(Bytes.toBytes(startTS),
-//							 Bytes.toBytes(endTS));
-		Scan scan = new Scan();
-
-		//		Scan scan = new Scan(Trending.generateStartKey(language, startTS),
-		//				Trending.generateEndKey(language, endTS));
-
-		/*Filter f = new
-				SingleColumnValueFilter(Bytes.toBytes(COLUMN_FAMILY),
-				Bytes.toBytes("lenguage"),
-				CompareFilter.CompareOp.EQUAL,Bytes.toBytes(language));
-
-		scan.setFilter(f);*/
-
+		Map<String, Integer> hashtags = new TreeMap<>();
+		ValueComparator bvc = new ValueComparator(hashtags);
+		TreeMap<String, Integer> sorted = new TreeMap<>(bvc);
+		
 		try {
 
-			System.out.println("Scaneando...");
-			ResultScanner rs = table.getScanner(scan);
-			//			Result res = rs.next();
+			HConnection conn = HConnectionManager.createConnection(conf);
+			HTable table = new HTable(TableName.valueOf(TABLE), conn);
 
-			System.out.println("Resultados: ");
-			for (Result res : rs) {
-				
-				System.out.println("item size: " + res.size() + ", " + new String(res.getRow()));
-				for(KeyValue kv : res.raw()){
-					//				CellScanner scanner = res.cellScanner();
-					//
-					//				while (scanner.advance()) {
-					//
-					//					Cell cell = scanner.current();
-					//					byte[] value = CellUtil.cloneValue(cell);
-					//					//TODO instanciar la salida en una estructura de datos y sacar el top-N
-					//					result += Bytes.toLong(value) + "\n"; // PROVISIONAL
-					//				}
-					Map<String, Object> values = kv.toStringMap();
-					String key = kv.getKeyString();
-					System.out.println("Key: " + key + ", Values: " + values);
+			Scan scan = new Scan(Trending.generateKey(language,startTS),
+								 Trending.generateKey(language,endTS));
 
+			//Aplicamos el filtro para que solo nos devuelva los hs con el lang adecuado
+			Filter f = new SingleColumnValueFilter(Bytes.toBytes(CF_METADATA),
+												   Bytes.toBytes("lang"),
+												   CompareOp.EQUAL,Bytes.toBytes(language));
+			scan.setFilter(f);
+
+			ResultScanner scanner = table.getScanner(scan);
+			
+			for (Result result = scanner.next(); result != null; result = scanner.next()) {
+
+				byte[] bname = result.getValue(Bytes.toBytes(CF_HASHTAG), Bytes.toBytes("name"));
+				byte[] bfreq = result.getValue(Bytes.toBytes(CF_HASHTAG), Bytes.toBytes("freq"));
+
+				Integer freq = hashtags.get(Bytes.toString(bname));
+				if (freq == null) {
+
+					hashtags.put(Bytes.toString(bname), Bytes.toInt(bfreq));
+				} else {
+
+					hashtags.put(Bytes.toString(bname), freq + Bytes.toInt(bfreq));
 				}
-				//				res = rs.next();
 			}
-			System.out.println("¡Eso es todo!");
 
 			table.close();
 			conn.close();
@@ -211,103 +165,138 @@ public class TrendingTable {
 			System.out.println("Error when trying to do query one." + e);
 		}
 
-		return result;
+		sorted.putAll(hashtags);
+		
+		String queryOutput = "";
+		Object [] ranking = sorted.keySet().toArray();
+		for (int position = 1; position <= n && position < ranking.length; position++) {
+			
+			queryOutput += language + ", " +
+						   position + ", " +
+						   ranking[position] + ", " +
+						   startTS + ", " +
+						   endTS +"\n";
+		}
+		
+		return queryOutput;
 	}
 
 	public String queryTwo(long startTS, long endTS, int n, List<String> languages) {
 
-		String result = "";
+		String queryOutput = "";
 
 		HConnection conn = null;
 		HTable table = null;
+
 		try {
+
 			conn = HConnectionManager.createConnection(conf);
-			System.out.println("accedemos a table.");
 			table = new HTable(TableName.valueOf(TABLE), conn);
 
-		} catch (IOException e) {
+			for (String lang : languages) {
 
-			System.out.println("Error when trying connect to hbase." + e);
-		}
+				Map<String, Integer> hashtags = new TreeMap<>();
+				ValueComparator bvc = new ValueComparator(hashtags);
+				TreeMap<String, Integer> sorted = new TreeMap<>(bvc);
+				
+				Scan scan = new Scan(Trending.generateKey(lang, startTS),
+									 Trending.generateKey(lang, endTS));
+				//Aplicamos el filtro para que solo nos devuelva los hashtag con el lang adecuado
+				Filter f = new SingleColumnValueFilter(Bytes.toBytes(CF_METADATA),
+													   Bytes.toBytes("lang"),
+													   CompareOp.EQUAL,Bytes.toBytes(lang));
+				scan.setFilter(f);
 
-		for (String lang : languages) {
+				ResultScanner scanner = table.getScanner(scan);
+	
+				for (Result result = scanner.next(); result != null; result = scanner.next()) {
 
-			Scan scan = new Scan(Trending.generateStartKey(lang, startTS),
-					Trending.generateEndKey(lang, endTS));
+					byte[] bname = result.getValue(Bytes.toBytes(CF_HASHTAG),Bytes.toBytes("name"));
+					byte[] bfreq = result.getValue(Bytes.toBytes(CF_HASHTAG),Bytes.toBytes("freq"));
 
-			try {
+					Integer freq = hashtags.get(Bytes.toString(bname));
+					if (freq == null) {
 
-				ResultScanner rs = table.getScanner(scan);
-				Result res = rs.next();
+						hashtags.put(Bytes.toString(bname), Bytes.toInt(bfreq));
+					} else {
 
-				while (res != null && !res.isEmpty()) {
-
-					CellScanner scanner = res.cellScanner();
-
-					while (scanner.advance()) {
-
-						Cell cell = scanner.current();
-						byte[] value = CellUtil.cloneValue(cell);
-						//TODO instanciar la salida en una estructura de datos y sacar el top-N
-						result += Bytes.toLong(value) + "\n"; // PROVISIONAL
+						hashtags.put(Bytes.toString(bname), freq + Bytes.toInt(bfreq));
 					}
-
-					res = rs.next();
 				}
-				table.close();
-				conn.close();
-			} catch (IOException e) {
 
-				System.out.println("Error when trying to do query two." + e);
+				sorted.putAll(hashtags);
+				
+				Object [] ranking = sorted.keySet().toArray();
+				for (int position = 1; position <= n  && position < ranking.length; position++) {
+					
+					queryOutput += lang + ", " +
+								   position + ", " +
+								   ranking[position] + ", " +
+								   startTS + ", " +
+								   endTS +"\n";
+				}
 			}
 
+			table.close();
+			conn.close();
+		} catch (IOException e) {
+
+			System.out.println("Error when trying to do query two." + e);
 		}
 
-		return result;
+		return queryOutput;
 	}
 
-	public String queryThree(long startTS, long endTS) {
+	public String queryThree(long startTS, long endTS, int n) {
 
-		String result = "";
-
-		HConnection conn = null;
-		HTable table = null;
-		try {
-			conn = HConnectionManager.createConnection(conf);
-			System.out.println("accedemos a table.");
-			table = new HTable(TableName.valueOf(TABLE), conn);
-
-		} catch (IOException e) {
-
-			System.out.println("Error when trying connect to hbase." + e);
-		}
+		String queryOutput = "";
+		Map<String, Integer> hashtags = new TreeMap<>();
+		ValueComparator bvc = new ValueComparator(hashtags);
+		TreeMap<String, Integer> sorted = new TreeMap<>(bvc);
 
 		try {
 
-			Scan scan = new Scan();
-			ResultScanner rs;
-			rs = table.getScanner(scan);
-			Result res = rs.next();
+			HConnection conn = HConnectionManager.createConnection(conf);
+			HTable table = new HTable(TableName.valueOf(TABLE), conn);
 
-			while (res != null && !res.isEmpty()) {
+			Scan scan = new Scan(Trending.generateStartKey(startTS),Trending.generateEndKey(endTS));
 
-				CellScanner scanner = res.cellScanner();
+			ResultScanner scanner = table.getScanner(scan);
 
-				while (scanner.advance()) {
+			for (Result result = scanner.next(); result != null; result = scanner.next()) {
 
-					Cell cell = scanner.current();
-					byte[] value = CellUtil.cloneValue(cell);
-					//TODO instanciar la salida en una estructura de datos y sacar el top-N
-					result += Bytes.toLong(value) + "\n"; // PROVISIONAL
+				byte[] bname = result.getValue(Bytes.toBytes(CF_HASHTAG),Bytes.toBytes("name"));
+				byte[] bfreq = result.getValue(Bytes.toBytes(CF_HASHTAG),Bytes.toBytes("freq"));
+
+				Integer freq = hashtags.get(Bytes.toString(bname));
+				if (freq == null) {
+
+					hashtags.put(Bytes.toString(bname), Bytes.toInt(bfreq));
+				} else {
+
+					hashtags.put(Bytes.toString(bname), freq + Bytes.toInt(bfreq));
 				}
-
-				res = rs.next();
 			}
+
+			table.close();
+			conn.close();
 		} catch (IOException e) {
 
-			System.out.println("Error when trying to do query three." + e);
+			System.out.println("Error when trying to do query one." + e);
+		}
+		
+		sorted.putAll(hashtags);
+		
+		Object [] ranking = sorted.keySet().toArray();
+		for (int position = 1; position <= n && position < ranking.length; position++) {
+
+			queryOutput += position + ", " +
+						   ranking[position] + ", " +
+						   sorted.get(ranking[position]) + ", " +
+						   startTS + ", " +
+						   endTS +"\n";
 		}
 
-		return result;
+		return queryOutput;
 	}
 }

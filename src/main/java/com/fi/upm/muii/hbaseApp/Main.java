@@ -17,6 +17,7 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -86,36 +87,44 @@ public class Main {
 		}
 	}
 
-	private static void writeOutputFolder(String result, String outputFolder) {
+	private void writeOutputFolder(String result, String outputFolder) {
 
 		Path file = Paths.get(outputFolder);
 
 		try {
+
 			if (!Files.exists(file)) {
-				Files.createDirectories(file.getParent());
+
+				Files.createDirectories(file.getParent().toAbsolutePath());
 				Files.createFile(file);
 			}
-			Files.write(file, result.getBytes());
 
+			Files.write(file, result.getBytes(), StandardOpenOption.APPEND);
+		} catch (SecurityException e) {
+			
+			System.out.println("Error to write by lack of authority for output folder.");
 		} catch (IOException e) {
-			System.out.println("Write to file failed...");
-			e.printStackTrace();
+
+			System.out.println("Write to file failed. " + e);
 		}
 	}
 
 	private void executeQueryOne(long startTS, long endTS, int n, String language, String outputFolder) {
-		String result = this.trendingTable.queryOne(startTS,endTS,n,language);
-		Main.writeOutputFolder(result,outputFolder + "14_query1.out");
+
+		String result = this.trendingTable.queryOne(startTS, endTS, n, language);
+		writeOutputFolder(result, outputFolder + "14_query1.out");
 	}
 
 	private void executeQueryTwo(long startTS, long endTS, int n, List<String> languages, String outputFolder) {
-		String result = this.trendingTable.queryTwo(startTS,endTS,n,languages);
-		Main.writeOutputFolder(result,outputFolder + "14_query2.out");
+
+		String result = this.trendingTable.queryTwo(startTS, endTS, n, languages);
+		writeOutputFolder(result, outputFolder + "14_query2.out");
 	}
 
-	private void executeQueryThree(long startTS, long endTS, String outputFolder) {
-		String result = this.trendingTable.queryThree(startTS,endTS);
-		Main.writeOutputFolder(result,outputFolder + "14_query2.out");
+	private void executeQueryThree(long startTS, long endTS, int n, String outputFolder) {
+
+		String result = this.trendingTable.queryThree(startTS, endTS, n);
+		writeOutputFolder(result, outputFolder + "14_query3.out");
 	}
 
 	public static void main( String[] args ) {
@@ -129,26 +138,26 @@ public class Main {
 			case 1:
 				// mode startTS endTS N language outputFolder
 				main.executeQueryOne(Long.parseLong(args[1]),
-						Long.parseLong(args[2]),
-						Integer.parseInt(args[3]),
-						// Arrays.asList(args[4].split(",")), (ONLY 1 LANG)
-						args[4],
-						args[5]);
+									 Long.parseLong(args[2]),
+									 Integer.parseInt(args[3]),
+									 args[4],
+									 args[5]);
 				break;
 			case 2:
-				// mode startTS endTS N language outputFolder
+				// mode startTS endTS N languages outputFolder
 				main.executeQueryTwo(Long.parseLong(args[1]),
-						Long.parseLong(args[2]),
-						Integer.parseInt(args[3]),
-						Arrays.asList(args[4].split(",")),
-						args[5]);
+									 Long.parseLong(args[2]),
+									 Integer.parseInt(args[3]),
+									 Arrays.asList(args[4].split(",")),
+									 args[5]);
 				break;
 			case 3:
 
 				// mode startTS endTS N outputFolder
 				main.executeQueryThree(Long.parseLong(args[1]),
-						Long.parseLong(args[2]),
-						args[3]);
+									   Long.parseLong(args[2]),
+									   Integer.parseInt(args[3]),
+									   args[4]);
 				break;
 			case 4:
 				// mode dataFolder
@@ -162,9 +171,6 @@ public class Main {
 			default:
 				appHelp();
 			}
-
-			// TODO: Esto habra que quitarlo en la version final
-//			main.trendingTable.deleteTable("trendingTopics");
 
 		} else {
 
