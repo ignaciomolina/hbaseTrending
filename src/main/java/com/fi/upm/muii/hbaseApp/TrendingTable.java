@@ -47,21 +47,22 @@ public class TrendingTable {
 	 * keys	| hashtag 						| metadata
 	 * 		| hashtag:name	| hashtag:freq	| metadata:lang	| metadata:ts
 	 */
-	
+
 	public TrendingTable() {
 
-		conf = HBaseConfiguration.create();
+		this.conf = HBaseConfiguration.create();
+		conf.addResource("hbase-site.xml");
+
 		String [] columnFamilies = {CF_HASHTAG, CF_METADATA};
 		createTable(TABLE, columnFamilies);
 	}
-	
+
 	public void createTable(String table, String [] columnFamilies) {
 
 		try {
 
 			HBaseAdmin admin = new HBaseAdmin(conf);
 
-			// DEBUGGING: crea siempre hasta asegurar que las tablas son correctas
 			if (!admin.tableExists(table)) {
 
 				HTableDescriptor tableDescriptor = new HTableDescriptor(TableName.valueOf(table));
@@ -73,7 +74,6 @@ public class TrendingTable {
 				admin.createTable(tableDescriptor);
 			}
 
-			//System.out.println("Table " + table + " created with table families: " + columnFamilies);
 			admin.close();
 
 		} catch (IOException e) {
@@ -97,7 +97,7 @@ public class TrendingTable {
 	public void storeData(Collection<Trending> trendings) {
 
 		try {
-			
+
 			HConnection conn = HConnectionManager.createConnection(conf);
 			HTable table = new HTable(TableName.valueOf(TABLE), conn);
 
@@ -115,7 +115,7 @@ public class TrendingTable {
 
 			table.close();
 			conn.close();
-			
+
 		} catch (IOException e) {
 			System.out.println("Error when trying to close table." + e);
 		}
@@ -126,14 +126,14 @@ public class TrendingTable {
 		Map<String, Integer> hashtags = new TreeMap<>();
 		ValueComparator bvc = new ValueComparator(hashtags);
 		TreeMap<String, Integer> sorted = new TreeMap<>(bvc);
-		
+
 		try {
 
 			HConnection conn = HConnectionManager.createConnection(conf);
 			HTable table = new HTable(TableName.valueOf(TABLE), conn);
 
-			Scan scan = new Scan(Trending.generateKey(language,startTS),
-								 Trending.generateKey(language,endTS));
+			Scan scan = new Scan(Trending.generateStartKey(startTS),
+							     Trending.generateStartKey(endTS));
 
 			//Aplicamos el filtro para que solo nos devuelva los hs con el lang adecuado
 			Filter f = new SingleColumnValueFilter(Bytes.toBytes(CF_METADATA),
@@ -142,13 +142,14 @@ public class TrendingTable {
 			scan.setFilter(f);
 
 			ResultScanner scanner = table.getScanner(scan);
-			
-			for (Result result = scanner.next(); result != null; result = scanner.next()) {
+
+			for (Result result = scanner.next(); result != null; result = scanner.next()) {			
 
 				byte[] bname = result.getValue(Bytes.toBytes(CF_HASHTAG), Bytes.toBytes("name"));
 				byte[] bfreq = result.getValue(Bytes.toBytes(CF_HASHTAG), Bytes.toBytes("freq"));
 
 				Integer freq = hashtags.get(Bytes.toString(bname));
+
 				if (freq == null) {
 
 					hashtags.put(Bytes.toString(bname), Bytes.toInt(bfreq));
@@ -166,18 +167,18 @@ public class TrendingTable {
 		}
 
 		sorted.putAll(hashtags);
-		
+
 		String queryOutput = "";
 		Object [] ranking = sorted.keySet().toArray();
-		for (int position = 1; position <= n && position < ranking.length; position++) {
-			
+		for (int position = 1; position <= n && position <= ranking.length; position++) {
+
 			queryOutput += language + ", " +
-						   position + ", " +
-						   ranking[position] + ", " +
-						   startTS + ", " +
-						   endTS +"\n";
+					position + ", " +
+					ranking[position-1] + ", " +
+					startTS + ", " +
+					endTS +"\n";
 		}
-		
+
 		return queryOutput;
 	}
 
@@ -198,17 +199,18 @@ public class TrendingTable {
 				Map<String, Integer> hashtags = new TreeMap<>();
 				ValueComparator bvc = new ValueComparator(hashtags);
 				TreeMap<String, Integer> sorted = new TreeMap<>(bvc);
+
+				Scan scan = new Scan(Trending.generateStartKey(startTS),
+						 			Trending.generateStartKey(endTS));
 				
-				Scan scan = new Scan(Trending.generateKey(lang, startTS),
-									 Trending.generateKey(lang, endTS));
 				//Aplicamos el filtro para que solo nos devuelva los hashtag con el lang adecuado
 				Filter f = new SingleColumnValueFilter(Bytes.toBytes(CF_METADATA),
-													   Bytes.toBytes("lang"),
-													   CompareOp.EQUAL,Bytes.toBytes(lang));
+														Bytes.toBytes("lang"),
+														CompareOp.EQUAL,Bytes.toBytes(lang));
 				scan.setFilter(f);
 
 				ResultScanner scanner = table.getScanner(scan);
-	
+
 				for (Result result = scanner.next(); result != null; result = scanner.next()) {
 
 					byte[] bname = result.getValue(Bytes.toBytes(CF_HASHTAG),Bytes.toBytes("name"));
@@ -225,15 +227,15 @@ public class TrendingTable {
 				}
 
 				sorted.putAll(hashtags);
-				
+
 				Object [] ranking = sorted.keySet().toArray();
-				for (int position = 1; position <= n  && position < ranking.length; position++) {
-					
+				for (int position = 1; position <= n  && position <= ranking.length; position++) {
+
 					queryOutput += lang + ", " +
-								   position + ", " +
-								   ranking[position] + ", " +
-								   startTS + ", " +
-								   endTS +"\n";
+							position + ", " +
+							ranking[position-1] + ", " +
+							startTS + ", " +
+							endTS +"\n";
 				}
 			}
 
@@ -259,7 +261,7 @@ public class TrendingTable {
 			HConnection conn = HConnectionManager.createConnection(conf);
 			HTable table = new HTable(TableName.valueOf(TABLE), conn);
 
-			Scan scan = new Scan(Trending.generateStartKey(startTS),Trending.generateEndKey(endTS));
+			Scan scan = new Scan(Trending.generateStartKey(startTS), Trending.generateEndKey(endTS));
 
 			ResultScanner scanner = table.getScanner(scan);
 
@@ -284,17 +286,17 @@ public class TrendingTable {
 
 			System.out.println("Error when trying to do query one." + e);
 		}
-		
+
 		sorted.putAll(hashtags);
-		
+
 		Object [] ranking = sorted.keySet().toArray();
-		for (int position = 1; position <= n && position < ranking.length; position++) {
+		for (int position = 1; position <= n && position <= ranking.length; position++) {
 
 			queryOutput += position + ", " +
-						   ranking[position] + ", " +
-						   sorted.get(ranking[position]) + ", " +
-						   startTS + ", " +
-						   endTS +"\n";
+					ranking[position-1] + ", " +
+					sorted.get(ranking[position-1]) + ", " +
+					startTS + ", " +
+					endTS +"\n";
 		}
 
 		return queryOutput;

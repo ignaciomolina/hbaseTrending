@@ -37,7 +37,7 @@ public class Trending {
 	
 	public byte[] getKey() {
 		
-		return generateKey(lenguage, timestamp);
+		return generateKey(lenguage, timestamp, hashtag);
 	}
 
 	public long getTimestamp() {
@@ -61,10 +61,12 @@ public class Trending {
 	 * 10 Bytes  (8 timestamp + 2 lang)
 	 */
 	
-	public static byte[] generateKey(String lang, long timestamp) {
-		byte[] key = new byte[10];
+	public static byte[] generateKey(String lang, long timestamp, String hashtag) {
+		
+		byte[] key = new byte[12];
 		System.arraycopy(Bytes.toBytes(timestamp),0,key,0,8);
 		System.arraycopy(Bytes.toBytes(lang),0,key,8,2);
+		System.arraycopy(Bytes.toBytes(hashtag),0,key,10,2);
 		return key;
 	}
 	

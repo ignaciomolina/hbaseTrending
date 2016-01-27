@@ -129,7 +129,7 @@ public class Main {
 
 	public static void main( String[] args ) {
 
-		if (args.length == 2 || args.length == 6 || args.length == 5) {
+		if (args.length == 2 || args.length == 6 || args.length == 5 || args.length == 1 && args[0].equals("5")) {
 
 			Main main = new Main();
 			int mode = Integer.parseInt(args[0]);
@@ -167,6 +167,9 @@ public class Main {
 
 					System.out.println("Error when processing files: " + e);
 				}
+				break;
+			case 5:
+				main.trendingTable.deleteTable("trendingTopics");
 				break;
 			default:
 				appHelp();

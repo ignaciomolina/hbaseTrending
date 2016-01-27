@@ -46,6 +46,9 @@
 							</jvmSettings>
 						</program>
 					</programs>
+					<configurationSourceDirectory>conf</configurationSourceDirectory>
+					<configurationDirectory>etc</configurationDirectory>
+					<copyConfigurationDirectory>true</copyConfigurationDirectory>
 				</configuration>
 			</plugin>
 		</plugins>
